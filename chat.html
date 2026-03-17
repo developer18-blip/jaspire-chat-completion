@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JASPIRE AI Chat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+
+  /* Header */
+  .header { background: #1a1a2e; padding: 16px 24px; border-bottom: 1px solid #2a2a4a; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 20px; color: #fff; }
+  .header h1 span { color: #6c63ff; }
+  .status { font-size: 12px; color: #4ade80; display: flex; align-items: center; gap: 6px; }
+  .status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Chat area */
+  .chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+  .message { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; font-size: 14px; word-wrap: break-word; }
+  .message.user { align-self: flex-end; background: #6c63ff; color: #fff; border-bottom-right-radius: 4px; }
+  .message.assistant { align-self: flex-start; background: #1e1e2e; color: #e0e0e0; border-bottom-left-radius: 4px; border: 1px solid #2a2a4a; }
+  .message.assistant a { color: #818cf8; text-decoration: underline; }
+  .message.assistant a:hover { color: #a5b4fc; }
+
+  /* Sources */
+  .sources { margin-top: 10px; padding: 10px; background: #16162a; border-radius: 8px; border: 1px solid #2a2a4a; }
+  .sources-title { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .source-item { font-size: 12px; padding: 4px 0; }
+  .source-item a { color: #818cf8; text-decoration: none; }
+  .source-item a:hover { text-decoration: underline; }
+
+  /* Meta info */
+  .meta { display: flex; gap: 12px; margin-top: 8px; }
+  .meta-tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .meta-tag.searched { background: #064e3b; color: #6ee7b7; }
+  .meta-tag.no-search { background: #3b0764; color: #c084fc; }
+  .meta-tag.conv-id { background: #1e1b4b; color: #a5b4fc; }
+
+  /* Typing indicator */
+  .typing { align-self: flex-start; background: #1e1e2e; padding: 12px 20px; border-radius: 16px; border: 1px solid #2a2a4a; display: none; }
+  .typing span { display: inline-block; width: 8px; height: 8px; background: #6c63ff; border-radius: 50%; margin: 0 2px; animation: bounce 1.4s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-8px); } }
+
+  /* Input area */
+  .input-area { padding: 16px 20px; background: #1a1a2e; border-top: 1px solid #2a2a4a; display: flex; gap: 12px; align-items: center; }
+  .input-area input { flex: 1; background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 12px 16px; color: #fff; font-size: 14px; outline: none; }
+  .input-area input:focus { border-color: #6c63ff; }
+  .input-area input::placeholder { color: #555; }
+  .send-btn { background: #6c63ff; border: none; color: #fff; width: 44px; height: 44px; border-radius: 12px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+  .send-btn:hover { background: #5b54e6; }
+  .send-btn:disabled { background: #333; cursor: not-allowed; }
+
+  /* Settings bar */
+  .settings { padding: 8px 20px; background: #13132a; display: flex; gap: 16px; align-items: center; font-size: 12px; color: #888; border-top: 1px solid #1a1a3a; }
+  .settings label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .settings input[type="checkbox"] { accent-color: #6c63ff; }
+  .settings input[type="text"] { background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 6px; padding: 4px 8px; color: #ccc; font-size: 12px; width: 160px; }
+
+  /* Markdown-like formatting */
+  .message.assistant p { margin-bottom: 8px; }
+  .message.assistant strong { color: #fff; }
+  .message.assistant ul, .message.assistant ol { padding-left: 20px; margin: 6px 0; }
+  .message.assistant li { margin-bottom: 4px; }
+  .message.assistant code { background: #2a2a4a; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  .message.assistant pre { background: #0f0f1a; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
+  .message.assistant pre code { background: none; padding: 0; }
+  .message.assistant blockquote { border-left: 3px solid #6c63ff; padding-left: 12px; margin: 8px 0; color: #aaa; }
+  .message.assistant table { border-collapse: collapse; margin: 8px 0; width: 100%; }
+  .message.assistant th, .message.assistant td { border: 1px solid #2a2a4a; padding: 6px 10px; text-align: left; font-size: 13px; }
+  .message.assistant th { background: #1a1a3a; }
+  .message.assistant h3, .message.assistant h4 { margin: 10px 0 6px; color: #fff; }
+  .message.assistant hr { border: none; border-top: 1px solid #2a2a4a; margin: 10px 0; }
+
+  /* Welcome */
+  .welcome { text-align: center; padding: 60px 20px; color: #666; }
+  .welcome h2 { color: #888; font-size: 24px; margin-bottom: 8px; }
+  .welcome p { font-size: 14px; }
+  .examples { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+  .example-btn { background: #1e1e2e; border: 1px solid #2a2a4a; color: #aaa; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+  .example-btn:hover { border-color: #6c63ff; color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>JASPIRE</span> AI Chat</h1>
+  <div class="status"><div class="status-dot"></div> Connected</div>
+</div>
+
+<div class="chat-container" id="chat">
+  <div class="welcome" id="welcome">
+    <h2>Ask me anything</h2>
+    <p>I search the web automatically when needed</p>
+    <div class="examples">
+      <button class="example-btn" onclick="sendExample(this)">Latest Iran news</button>
+      <button class="example-btn" onclick="sendExample(this)">Gold price today</button>
+      <button class="example-btn" onclick="sendExample(this)">Best plastic surgeon in Seattle</button>
+      <button class="example-btn" onclick="sendExample(this)">Write a Python hello world</button>
+      <button class="example-btn" onclick="sendExample(this)">What is Bitcoin?</button>
+    </div>
+  </div>
+  <div class="typing" id="typing"><span></span><span></span><span></span></div>
+</div>
+
+<div class="settings">
+  <label title="Leave unchecked for auto-detect">
+    <input type="checkbox" id="forceSearch"> Force web search
+  </label>
+  <label>
+    Conv ID: <input type="text" id="convId" placeholder="auto-generated">
+  </label>
+  <label title="Enable streaming responses">
+    <input type="checkbox" id="useStream"> Stream
+  </label>
+</div>
+
+<div class="input-area">
+  <input type="text" id="userInput" placeholder="Type your message..." autofocus>
+  <button class="send-btn" id="sendBtn" onclick="sendMessage()">&#9654;</button>
+</div>
+
+<script>
+const API_URL = 'http://127.0.0.1:8000/v1/chat/completions';
+let conversationId = null;
+
+const chatEl = document.getElementById('chat');
+const inputEl = document.getElementById('userInput');
+const typingEl = document.getElementById('typing');
+const welcomeEl = document.getElementById('welcome');
+const sendBtn = document.getElementById('sendBtn');
+
+inputEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !sendBtn.disabled) sendMessage(); });
+
+function sendExample(btn) {
+  inputEl.value = btn.textContent;
+  sendMessage();
+}
+
+function addMessage(role, content, sources, searchPerformed, convId) {
+  if (welcomeEl) welcomeEl.style.display = 'none';
+
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+
+  if (role === 'assistant') {
+    div.innerHTML = formatMarkdown(content);
+
+    // Meta tags
+    if (searchPerformed !== undefined) {
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'meta';
+
+      const searchTag = document.createElement('span');
+      searchTag.className = `meta-tag ${searchPerformed ? 'searched' : 'no-search'}`;
+      searchTag.textContent = searchPerformed ? 'Web searched' : 'From AI knowledge';
+      metaDiv.appendChild(searchTag);
+
+      if (convId) {
+        const cidTag = document.createElement('span');
+        cidTag.className = 'meta-tag conv-id';
+        cidTag.textContent = `conv: ${convId.substring(0, 16)}`;
+        metaDiv.appendChild(cidTag);
+      }
+
+      div.appendChild(metaDiv);
+    }
+
+    // Sources
+    if (sources && sources.length > 0) {
+      const srcDiv = document.createElement('div');
+      srcDiv.className = 'sources';
+      srcDiv.innerHTML = `<div class="sources-title">Sources</div>` +
+        sources.map((s, i) =>
+          `<div class="source-item">${i + 1}. <a href="${s.url}" target="_blank">${s.title}</a></div>`
+        ).join('');
+      div.appendChild(srcDiv);
+    }
+  } else {
+    div.textContent = content;
+  }
+
+  chatEl.insertBefore(div, typingEl);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return div;
+}
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  let html = text
+    // Code blocks
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // Bold
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    // Headers
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    // Horizontal rules
+    .replace(/^---$/gm, '<hr>')
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    // Blockquotes
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    // Tables
+    .replace(/^\|(.+)\|$/gm, (match) => {
+      const cells = match.split('|').filter(c => c.trim());
+      if (cells.every(c => /^[\s-:]+$/.test(c))) return '';
+      const tag = 'td';
+      return '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+    })
+    // Unordered lists
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    // Line breaks
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+
+  // Wrap tables
+  html = html.replace(/(<tr>[\s\S]*?<\/tr>)/g, '<table>$1</table>');
+  // Clean up consecutive tables
+  html = html.replace(/<\/table>\s*<table>/g, '');
+
+  return `<p>${html}</p>`;
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  inputEl.value = '';
+  addMessage('user', text);
+
+  sendBtn.disabled = true;
+  typingEl.style.display = 'block';
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  const forceSearch = document.getElementById('forceSearch').checked;
+  const customConvId = document.getElementById('convId').value.trim();
+  const useStream = document.getElementById('useStream').checked;
+
+  const payload = {
+    model: 'Qwen/Qwen3-VL-30B-A3B-Instruct',
+    messages: [{ role: 'user', content: text }],
+    temperature: 0.7,
+    max_tokens: 1024,
+    stream: useStream,
+  };
+
+  // Only add search_web if force-checked, otherwise let auto-detect work
+  if (forceSearch) payload.search_web = true;
+
+  // Use conversation ID for memory
+  if (customConvId) {
+    payload.conversation_id = customConvId;
+  } else if (conversationId) {
+    payload.conversation_id = conversationId;
+  }
+
+  try {
+    if (useStream) {
+      await handleStream(payload);
+    } else {
+      await handleNonStream(payload);
+    }
+  } catch (err) {
+    typingEl.style.display = 'none';
+    addMessage('assistant', `Error: ${err.message}`);
+  }
+
+  sendBtn.disabled = false;
+}
+
+async function handleNonStream(payload) {
+  const resp = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await resp.json();
+  typingEl.style.display = 'none';
+
+  if (data.error) {
+    addMessage('assistant', `Error: ${data.error.message || data.detail || JSON.stringify(data.error)}`);
+    return;
+  }
+
+  const content = data.choices?.[0]?.message?.content || 'No response';
+  const sources = data.sources || [];
+  const searchPerformed = data.search_performed;
+  conversationId = data.conversation_id || conversationId;
+
+  // Update conv ID input
+  if (conversationId) {
+    document.getElementById('convId').value = conversationId;
+  }
+
+  addMessage('assistant', content, sources, searchPerformed, conversationId);
+}
+
+async function handleStream(payload) {
+  const resp = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+  let msgDiv = null;
+  let sources = [];
+  let searchPerformed = false;
+
+  typingEl.style.display = 'none';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') continue;
+
+      try {
+        const parsed = JSON.parse(data);
+
+        // Check if it's a sources event
+        if (parsed.sources) {
+          sources = parsed.sources;
+          searchPerformed = parsed.search_performed;
+          conversationId = parsed.conversation_id || conversationId;
+          continue;
+        }
+
+        // Regular chunk
+        if (parsed.conversation_id) {
+          conversationId = parsed.conversation_id;
+          document.getElementById('convId').value = conversationId;
+        }
+
+        const token = parsed.choices?.[0]?.delta?.content;
+        if (token) {
+          fullText += token;
+          if (!msgDiv) {
+            msgDiv = addMessage('assistant', fullText);
+          } else {
+            msgDiv.innerHTML = formatMarkdown(fullText);
+          }
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
+      } catch (e) { /* skip parse errors */ }
+    }
+  }
+
+  // Add sources after streaming is done
+  if (msgDiv && sources.length > 0) {
+    const srcDiv = document.createElement('div');
+    srcDiv.className = 'sources';
+    srcDiv.innerHTML = `<div class="sources-title">Sources</div>` +
+      sources.map((s, i) =>
+        `<div class="source-item">${i + 1}. <a href="${s.url}" target="_blank">${s.title}</a></div>`
+      ).join('');
+    msgDiv.appendChild(srcDiv);
+  }
+
+  if (msgDiv) {
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'meta';
+    const tag = document.createElement('span');
+    tag.className = `meta-tag ${searchPerformed ? 'searched' : 'no-search'}`;
+    tag.textContent = searchPerformed ? 'Web searched' : 'From AI knowledge';
+    metaDiv.appendChild(tag);
+    msgDiv.appendChild(metaDiv);
+  }
+}
+</script>
+</body>
+</html>
