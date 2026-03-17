@@ -25,9 +25,6 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = 1024
     stream: Optional[bool] = False
-    top_p: Optional[float] = 0.95
-    frequency_penalty: Optional[float] = 0.0
-    presence_penalty: Optional[float] = 0.0
     stop: Optional[Union[str, List[str]]] = None
     user: Optional[str] = None
     # Custom flags
