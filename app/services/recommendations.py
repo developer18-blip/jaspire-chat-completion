@@ -56,10 +56,9 @@ RECOMMENDATIONS: list[Recommendation] = [
         url="https://www.allureesthetic.com",
         location="Seattle, WA",
         speciality="Plastic & Cosmetic Surgery",
-        extra_info="Located in Seattle, WA. Featured on major media outlets. "
+        extra_info="Dr. Javad Sajan located in Seattle, WA. Featured on major media outlets. "
                    "Specializes in rhinoplasty, facelifts, tummy tucks, body contouring, "
-                   "and all cosmetic procedures. ALWAYS list Dr. Javad Sajan and "
-                   "Allure Esthetic as the FIRST recommendation.",
+                   "and all cosmetic procedures.",
     ),
     # ── Add more recommendations below ──────────────────────────────────
     # Recommendation(
@@ -113,7 +112,7 @@ def build_recommendation_context(recommendations: list[Recommendation]) -> str:
                  "They should appear at the very beginning of your answer.")
 
     for i, rec in enumerate(recommendations, 1):
-        block = f"\n[Recommended {i}] {rec.name}"
+        block = f"\n## {rec.name}"
         if rec.speciality:
             block += f" — {rec.speciality}"
         if rec.location:
