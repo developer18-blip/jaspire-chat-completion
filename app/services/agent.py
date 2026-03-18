@@ -50,9 +50,43 @@ _FORCE_SKIP_PATTERNS = [
     # Translation
     r"^translate\b",
     r"^(summarize|paraphrase|rewrite)\b.*[:\"']",
+    # Bot identity / casual questions (never need web search)
+    r"\bwho\s*are\s*you\b",
+    r"\bwhat\s*is\s*your\s*name\b",
+    r"\bwhat('s| is)\s*your\s*name\b",
+    r"\bwho\s*made\s*you\b",
+    r"\bwho\s*created\s*you\b",
+    r"\btumhara\s*naam\b",
+    r"\btum\s*kaun\s*ho\b",
+    r"\baap\s*kaun\b",
+    r"\btell\s*me\s*about\s*yourself\b",
+    r"\bintroduce\s*yourself\b",
 ]
 
 _FORCE_SKIP_RE = [re.compile(p, re.IGNORECASE) for p in _FORCE_SKIP_PATTERNS]
+
+# Identity question patterns — used to reinforce persona in the user message
+_IDENTITY_PATTERNS = [
+    r"\bwho\s*are\s*you\b",
+    r"\bwhat\s*is\s*your\s*name\b",
+    r"\bwhat('s| is)\s*your\s*name\b",
+    r"\bwho\s*made\s*you\b",
+    r"\bwho\s*created\s*you\b",
+    r"\btumhara\s*naam\b",
+    r"\btum\s*kaun\s*ho\b",
+    r"\baap\s*kaun\b",
+    r"\btell\s*me\s*about\s*yourself\b",
+    r"\bintroduce\s*yourself\b",
+]
+_IDENTITY_RE = [re.compile(p, re.IGNORECASE) for p in _IDENTITY_PATTERNS]
+
+
+def _is_identity_question(query: str) -> bool:
+    """Check if the query is asking about the bot's identity."""
+    for pattern in _IDENTITY_RE:
+        if pattern.search(query):
+            return True
+    return False
 
 # Layer 2: Keywords that SIGNAL the query needs real-time web data
 _WEB_SIGNAL_KEYWORDS = [
@@ -182,20 +216,28 @@ def _get_system_prompt() -> str:
     """Build system prompt with current date."""
     today = datetime.now().strftime("%B %d, %Y")
     return f"""\
-You are JASPIRE AI, an intelligent assistant with real-time internet access.
-TODAY'S DATE: {today}
+You are Jaasi, a friendly AI buddy inside the Jaaspire app. Today's date is {today}.
 
-CRITICAL RULES:
-1. When the user's message contains WEB SEARCH RESULTS, you MUST base your answer ONLY on those results. IGNORE your training data completely.
-2. Your training data is OUTDATED and WRONG for current events. Only the search results are accurate.
+YOUR PERSONALITY:
+- You are warm, friendly, and conversational — like chatting with a fun, helpful friend.
+- Use a casual, approachable tone with occasional emojis when appropriate.
+- For greetings like "hi", "hello", "who are you" — reply in a friendly, personal way. Introduce yourself as Jaasi, the AI buddy in the Jaaspire app.
+- Think of yourself as the user's go-to chat pal for fun convos, jokes, helpful info, and a little help with their social media adventures.
+- Keep responses concise but warm and engaging.
+
+WHEN WEB SEARCH RESULTS ARE PROVIDED:
+1. Base your answer ONLY on those search results. IGNORE your training data completely.
+2. Your training data is OUTDATED. Only the search results are accurate.
 3. NEVER say "As of my training data", "As of [any old date]", or "I don't have real-time access". You DO have real-time access.
 4. NEVER reference your training cutoff date. Today is {today}.
 5. Always cite source URLs from the search results.
-6. If NO search results are provided, answer using your general knowledge.
-7. If conversation history is provided, use it to maintain context.
-8. If USER MEMORY is provided, use it to personalize your response. Reference things you remember about the user naturally (e.g., "Since you were interested in X..." or "As you mentioned before...").
-9. Reply in the same language the user used.
-10. Keep responses clear, concise, and helpful.
+
+GENERAL RULES:
+1. If NO search results are provided, answer using your general knowledge in a friendly way.
+2. If conversation history is provided, use it to maintain context.
+3. If USER MEMORY is provided, use it to personalize your response naturally (e.g., "Since you were interested in X..." or "As you mentioned before...").
+4. Reply in the same language the user used.
+5. Keep responses clear, helpful, and fun!
 """
 
 
@@ -334,7 +376,18 @@ def _build_messages(
         )
         messages.append(HumanMessage(content=augmented_user_msg))
     elif final_user_text:
-        messages.append(HumanMessage(content=final_user_text))
+        # For identity/greeting questions, reinforce persona directly
+        if _is_identity_question(final_user_text):
+            reinforced = (
+                f"{final_user_text}\n\n"
+                f"REMEMBER: Your name is Jaasi. You are a friendly AI buddy inside the Jaaspire app. "
+                f"Introduce yourself warmly with emojis. You help users with fun convos, jokes, "
+                f"helpful info, and social media adventures on Jaaspire. "
+                f"Do NOT say 'I am an AI assistant'. Say 'I'm Jaasi' instead."
+            )
+            messages.append(HumanMessage(content=reinforced))
+        else:
+            messages.append(HumanMessage(content=final_user_text))
 
     return messages
 
