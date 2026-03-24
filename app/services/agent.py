@@ -61,6 +61,12 @@ _FORCE_SKIP_PATTERNS = [
     r"\baap\s*kaun\b",
     r"\btell\s*me\s*about\s*yourself\b",
     r"\bintroduce\s*yourself\b",
+    # Capability questions (bot should answer from identity, not search)
+    r"\bcan\s*you\s*(do|perform|use|run)\s*(web\s*)?search\b",
+    r"\bdo\s*you\s*(have|support)\s*(web\s*)?search\b",
+    r"\bcan\s*you\s*search\s*(the\s*)?(web|internet|online)\b",
+    r"\bwhat\s*can\s*you\s*do\b",
+    r"\bwhat\s*are\s*your\s*(features|capabilities|abilities)\b",
 ]
 
 _FORCE_SKIP_RE = [re.compile(p, re.IGNORECASE) for p in _FORCE_SKIP_PATTERNS]
@@ -84,6 +90,25 @@ _IDENTITY_RE = [re.compile(p, re.IGNORECASE) for p in _IDENTITY_PATTERNS]
 def _is_identity_question(query: str) -> bool:
     """Check if the query is asking about the bot's identity."""
     for pattern in _IDENTITY_RE:
+        if pattern.search(query):
+            return True
+    return False
+
+
+# Capability question patterns
+_CAPABILITY_PATTERNS = [
+    r"\bcan\s*you\s*(do|perform|use|run)\s*(web\s*)?search\b",
+    r"\bdo\s*you\s*(have|support)\s*(web\s*)?search\b",
+    r"\bcan\s*you\s*search\s*(the\s*)?(web|internet|online)\b",
+    r"\bwhat\s*can\s*you\s*do\b",
+    r"\bwhat\s*are\s*your\s*(features|capabilities|abilities)\b",
+]
+_CAPABILITY_RE = [re.compile(p, re.IGNORECASE) for p in _CAPABILITY_PATTERNS]
+
+
+def _is_capability_question(query: str) -> bool:
+    """Check if the query is asking about bot capabilities."""
+    for pattern in _CAPABILITY_RE:
         if pattern.search(query):
             return True
     return False
@@ -225,12 +250,26 @@ YOUR PERSONALITY:
 - Think of yourself as the user's go-to chat pal for fun convos, jokes, helpful info, and a little help with their social media adventures.
 - Keep responses concise but warm and engaging.
 
+YOUR CAPABILITIES:
+- You CAN do web search! You have a built-in web search feature that lets you fetch up-to-date information with sources.
+- You can look up real-time information from the internet, like:
+  * Latest news and current events
+  * Weather updates
+  * Stock prices / sports scores
+  * Local places (restaurants, shops, etc.)
+  * Any real-time or factual information
+- When someone asks "can you do web search" or "what can you do", proudly tell them about your capabilities!
+- NEVER say "I can't do web searches" or "I don't have real-time access" — because you DO have these capabilities.
+
 WHEN WEB SEARCH RESULTS ARE PROVIDED:
 1. Base your answer ONLY on those search results. IGNORE your training data completely.
 2. Your training data is OUTDATED. Only the search results are accurate.
-3. NEVER say "As of my training data", "As of [any old date]", or "I don't have real-time access". You DO have real-time access.
+3. NEVER say "As of my training data", "As of [any old date]", or "I don't have real-time access". You DO have real-time access via web search.
 4. NEVER reference your training cutoff date. Today is {today}.
 5. Always cite source URLs from the search results.
+6. Present the information in a well-organized, categorized format with emojis for section headers (like 🏛️ Politics, 🌤️ Weather, 💰 Economy, ⚽ Sports, etc.).
+7. Use bullet points for each news item and bold the key facts.
+8. At the end, offer to dive deeper into any specific topic.
 
 GENERAL RULES:
 1. If NO search results are provided, answer using your general knowledge in a friendly way.
@@ -384,6 +423,17 @@ def _build_messages(
                 f"Introduce yourself warmly with emojis. You help users with fun convos, jokes, "
                 f"helpful info, and social media adventures on Jaaspire. "
                 f"Do NOT say 'I am an AI assistant'. Say 'I'm Jaasi' instead."
+            )
+            messages.append(HumanMessage(content=reinforced))
+        elif _is_capability_question(final_user_text):
+            reinforced = (
+                f"{final_user_text}\n\n"
+                f"REMEMBER: You are Jaasi and you CAN do web search! You have a built-in web search "
+                f"feature that lets you fetch up-to-date information from the internet. "
+                f"You can look up: latest news, weather updates, stock prices, sports scores, "
+                f"local places, and any real-time information. "
+                f"Answer proudly and confidently with emojis. List your capabilities with bullet points. "
+                f"NEVER say you cannot search the web — because you CAN."
             )
             messages.append(HumanMessage(content=reinforced))
         else:
