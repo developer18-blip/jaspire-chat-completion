@@ -185,7 +185,11 @@ async def chat_completions(request: ChatCompletionRequest):
                 message=ResponseMessage(role="assistant", content=result.answer),
                 finish_reason="stop",
             )],
-            usage=Usage(),
+            usage=Usage(
+                prompt_tokens=result.prompt_tokens,
+                completion_tokens=result.completion_tokens,
+                total_tokens=result.total_tokens,
+            ),
             conversation_id=result.conversation_id,
             sources=sources,
             search_performed=result.search_performed,

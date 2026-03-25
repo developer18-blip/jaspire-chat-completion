@@ -287,6 +287,9 @@ class AgentResponse:
     sources: list[dict] = field(default_factory=list)
     conversation_id: str = ""
     search_performed: bool = False
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -508,6 +511,20 @@ async def get_agent_response(
     reply = await llm.ainvoke(lc_messages)
     answer = _flatten_content(getattr(reply, "content", "")) or ""
 
+    # Extract token usage from LLM response
+    usage_meta = getattr(reply, "response_metadata", {})
+    token_usage = usage_meta.get("token_usage", {})
+    prompt_tokens = token_usage.get("prompt_tokens", 0)
+    completion_tokens = token_usage.get("completion_tokens", 0)
+    total_tokens = token_usage.get("total_tokens", 0)
+    # Fallback: estimate if LLM didn't return usage
+    if total_tokens == 0 and answer:
+        # Rough estimate: ~4 chars per token
+        prompt_text = " ".join(m.content if hasattr(m, 'content') else '' for m in lc_messages)
+        prompt_tokens = max(len(prompt_text) // 4, 1)
+        completion_tokens = max(len(answer) // 4, 1)
+        total_tokens = prompt_tokens + completion_tokens
+
     # Step 7: Save to memory
     user_query = _extract_user_query(openai_messages)
     if user_query:
@@ -533,6 +550,9 @@ async def get_agent_response(
         sources=sources,
         conversation_id=conv_id,
         search_performed=search_performed,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
     )
 
 
