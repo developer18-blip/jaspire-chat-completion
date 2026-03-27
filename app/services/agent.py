@@ -512,30 +512,28 @@ async def get_agent_response(
     reply = await llm.ainvoke(lc_messages)
     answer = _flatten_content(getattr(reply, "content", "")) or ""
 
-    # Extract token usage from LLM response
+    # Extract token usage from LLM response (exclude system prompt overhead)
     usage_meta = getattr(reply, "response_metadata", {})
-    logger.info(f"[Agent] LLM response_metadata: {usage_meta}")
-
-    # Try multiple paths where token usage might be
     token_usage = (
         usage_meta.get("token_usage")
         or usage_meta.get("usage")
         or {}
     )
-    prompt_tokens = token_usage.get("prompt_tokens", 0)
+    raw_prompt_tokens = token_usage.get("prompt_tokens", 0)
     completion_tokens = token_usage.get("completion_tokens", 0)
-    total_tokens = token_usage.get("total_tokens", 0)
 
-    # Fallback: estimate using tiktoken-style approximation
-    if total_tokens == 0 and answer:
-        prompt_text = " ".join(
-            m.content if hasattr(m, 'content') and isinstance(m.content, str) else ''
-            for m in lc_messages
-        )
-        prompt_tokens = max(len(prompt_text) // 4, 1)
+    # Subtract system prompt tokens so users only see their own usage
+    system_prompt_text = _get_system_prompt()
+    system_prompt_tokens = max(len(system_prompt_text) // 4, 0)
+    prompt_tokens = max(raw_prompt_tokens - system_prompt_tokens, 1) if raw_prompt_tokens > 0 else 0
+    total_tokens = prompt_tokens + completion_tokens
+
+    # Fallback: estimate if LLM didn't return usage
+    if raw_prompt_tokens == 0 and answer:
+        user_text = _extract_user_query(openai_messages)
+        prompt_tokens = max(len(user_text) // 4, 1)
         completion_tokens = max(len(answer) // 4, 1)
         total_tokens = prompt_tokens + completion_tokens
-        logger.info(f"[Agent] Using estimated tokens: prompt={prompt_tokens} completion={completion_tokens}")
 
     # Step 7: Save to memory
     user_query = _extract_user_query(openai_messages)
