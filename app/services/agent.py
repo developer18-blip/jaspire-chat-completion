@@ -304,6 +304,7 @@ def _build_llm(temperature: float, max_tokens: int, streaming: bool):
         temperature=temperature,
         max_tokens=max_tokens,
         streaming=streaming,
+        model_kwargs={"stream_options": {"include_usage": True}} if streaming else {},
     )
 
 
@@ -513,17 +514,28 @@ async def get_agent_response(
 
     # Extract token usage from LLM response
     usage_meta = getattr(reply, "response_metadata", {})
-    token_usage = usage_meta.get("token_usage", {})
+    logger.info(f"[Agent] LLM response_metadata: {usage_meta}")
+
+    # Try multiple paths where token usage might be
+    token_usage = (
+        usage_meta.get("token_usage")
+        or usage_meta.get("usage")
+        or {}
+    )
     prompt_tokens = token_usage.get("prompt_tokens", 0)
     completion_tokens = token_usage.get("completion_tokens", 0)
     total_tokens = token_usage.get("total_tokens", 0)
-    # Fallback: estimate if LLM didn't return usage
+
+    # Fallback: estimate using tiktoken-style approximation
     if total_tokens == 0 and answer:
-        # Rough estimate: ~4 chars per token
-        prompt_text = " ".join(m.content if hasattr(m, 'content') else '' for m in lc_messages)
+        prompt_text = " ".join(
+            m.content if hasattr(m, 'content') and isinstance(m.content, str) else ''
+            for m in lc_messages
+        )
         prompt_tokens = max(len(prompt_text) // 4, 1)
         completion_tokens = max(len(answer) // 4, 1)
         total_tokens = prompt_tokens + completion_tokens
+        logger.info(f"[Agent] Using estimated tokens: prompt={prompt_tokens} completion={completion_tokens}")
 
     # Step 7: Save to memory
     user_query = _extract_user_query(openai_messages)
