@@ -33,6 +33,23 @@ class ChatCompletionRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Shared models (used by both streaming and non-streaming)
+# ---------------------------------------------------------------------------
+
+class Usage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+
+class Source(BaseModel):
+    """A web search source."""
+    title: str
+    url: str
+    snippet: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Streaming response models
 # ---------------------------------------------------------------------------
 
@@ -55,7 +72,10 @@ class ChatCompletionChunk(BaseModel):
     created: int
     model: str
     choices: List[StreamChoice]
+    usage: Optional[Usage] = None
     conversation_id: Optional[str] = None
+    sources: Optional[List[Source]] = None
+    search_performed: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -72,19 +92,6 @@ class Choice(BaseModel):
     message: ResponseMessage
     finish_reason: str = "stop"
     logprobs: Optional[Any] = None
-
-
-class Usage(BaseModel):
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-
-
-class Source(BaseModel):
-    """A web search source."""
-    title: str
-    url: str
-    snippet: str = ""
 
 
 class ChatCompletionResponse(BaseModel):

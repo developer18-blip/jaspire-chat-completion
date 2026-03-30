@@ -645,9 +645,15 @@ async def stream_agent_response(
                 full_answer.append(text)
                 yield text
 
-        # After streaming is done, save to memory
+        # After streaming is done, calculate tokens and save to memory
         answer = "".join(full_answer)
         meta.answer = answer
+
+        # Calculate user-facing token usage
+        user_text = _extract_user_query(openai_messages)
+        meta.prompt_tokens = max(len(user_text.split()), 1) if user_text else 1
+        meta.completion_tokens = max(len(answer.split()), 1) if answer else 0
+        meta.total_tokens = meta.prompt_tokens + meta.completion_tokens
 
         user_query = _extract_user_query(openai_messages)
         if user_query:

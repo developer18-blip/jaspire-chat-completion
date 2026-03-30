@@ -64,7 +64,7 @@ async def _sse_stream(
             finish_reason=None,
         )],
     )
-    yield f"data: {first.model_dump_json()}\n\n"
+    yield f"data: {first.model_dump_json(exclude_none=True)}\n\n"
 
     # Get the streaming generator + metadata
     generator, meta = await stream_agent_response(
@@ -91,9 +91,15 @@ async def _sse_stream(
                 finish_reason=None,
             )],
         )
-        yield f"data: {chunk.model_dump_json()}\n\n"
+        yield f"data: {chunk.model_dump_json(exclude_none=True)}\n\n"
 
-    # Final chunk: mark finish
+    # Build sources list
+    sources_list = [
+        Source(title=s["title"], url=s["url"], snippet=s.get("snippet", ""))
+        for s in meta.sources
+    ] if meta.sources else None
+
+    # Final chunk: finish_reason + usage + sources (ChatGPT style)
     final = ChatCompletionChunk(
         id=completion_id,
         created=created,
@@ -104,18 +110,15 @@ async def _sse_stream(
             delta=DeltaMessage(),
             finish_reason="stop",
         )],
+        usage=Usage(
+            prompt_tokens=meta.prompt_tokens,
+            completion_tokens=meta.completion_tokens,
+            total_tokens=meta.total_tokens,
+        ),
+        sources=sources_list,
+        search_performed=meta.search_performed,
     )
-    yield f"data: {final.model_dump_json()}\n\n"
-
-    # Send sources as a custom SSE event (clients that don't need it can ignore)
-    if meta.sources:
-        import json
-        sources_data = {
-            "sources": meta.sources,
-            "conversation_id": meta.conversation_id,
-            "search_performed": meta.search_performed,
-        }
-        yield f"data: {json.dumps(sources_data)}\n\n"
+    yield f"data: {final.model_dump_json(exclude_none=True)}\n\n"
 
     yield "data: [DONE]\n\n"
 
