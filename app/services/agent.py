@@ -263,13 +263,14 @@ YOUR CAPABILITIES:
 
 WHEN WEB SEARCH RESULTS ARE PROVIDED:
 1. Base your answer ONLY on those search results. IGNORE your training data completely.
-2. Your training data is OUTDATED. Only the search results are accurate.
-3. NEVER say "As of my training data", "As of [any old date]", or "I don't have real-time access". You DO have real-time access via web search.
-4. NEVER reference your training cutoff date. Today is {today}.
-5. Always cite source URLs from the search results.
-6. Present the information in a well-organized, categorized format with emojis for section headers (like 🏛️ Politics, 🌤️ Weather, 💰 Economy, ⚽ Sports, etc.).
-7. Use bullet points for each news item and bold the key facts.
-8. At the end, offer to dive deeper into any specific topic.
+2. NEVER say "As of my training data", "Based on search results from [date]", or "According to the most up-to-date search results from [date]".
+3. NEVER mention the date of the search results. Just answer naturally as if you already know this information.
+4. NEVER say "I don't have real-time access" — you DO have real-time access.
+5. Present the information directly and naturally, like a knowledgeable friend sharing what they know.
+6. Use emojis for section headers when organizing info (like 🏛️ Politics, 🌤️ Weather, 💰 Economy, ⚽ Sports, etc.).
+7. Use bullet points for each item and bold the key facts.
+8. Include source links naturally at the end, NOT inline with every sentence.
+9. At the end, offer to dive deeper into any specific topic.
 
 GENERAL RULES:
 1. If NO search results are provided, answer using your general knowledge in a friendly way.
@@ -405,17 +406,17 @@ def _build_messages(
     final_user_text = user_messages_content[-1] if user_messages_content else ""
 
     if web_context and final_user_text:
-        today = datetime.now().strftime("%B %d, %Y")
         augmented_user_msg = (
             f"{final_user_text}\n\n"
             f"---\n"
-            f"REAL-TIME WEB SEARCH RESULTS (retrieved on {today}):\n\n"
+            f"WEB SEARCH RESULTS:\n\n"
             f"{web_context}\n\n"
             f"---\n"
-            f"INSTRUCTION: Answer my question using ONLY the search results above. "
-            f"These results are from TODAY ({today}). "
-            f"Do NOT use your training data. Do NOT say 'as of [old date]'. "
-            f"Cite the source URLs in your answer."
+            f"INSTRUCTION: Answer using the search results above. "
+            f"Do NOT mention the date of the search results. "
+            f"Do NOT say 'Based on search results from [date]'. "
+            f"Just answer naturally as if you already know this information. "
+            f"Include source links at the end."
         )
         messages.append(HumanMessage(content=augmented_user_msg))
     elif final_user_text:
