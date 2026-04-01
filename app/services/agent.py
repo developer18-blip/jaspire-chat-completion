@@ -520,24 +520,16 @@ async def get_agent_response(
     reply = await llm.ainvoke(lc_messages)
     answer = _flatten_content(getattr(reply, "content", "")) or ""
 
-    # Calculate user-facing token usage (only user's message + response)
+    # Extract actual token usage from Qwen/vLLM
     usage_meta = getattr(reply, "response_metadata", {})
     token_usage = (
         usage_meta.get("token_usage")
         or usage_meta.get("usage")
         or {}
     )
+    prompt_tokens = token_usage.get("prompt_tokens", 0)
     completion_tokens = token_usage.get("completion_tokens", 0)
-
-    # Prompt tokens = only the user's actual message, not system prompt/search/history
-    user_text = _extract_user_query(openai_messages)
-    prompt_tokens = max(len(user_text.split()), 1) if user_text else 1
-
-    # Fallback for completion if LLM didn't return it
-    if completion_tokens == 0 and answer:
-        completion_tokens = max(len(answer.split()), 1)
-
-    total_tokens = prompt_tokens + completion_tokens
+    total_tokens = token_usage.get("total_tokens", 0)
 
     # Step 7: Save to memory
     user_query = _extract_user_query(openai_messages)
@@ -649,10 +641,14 @@ async def stream_agent_response(
         answer = "".join(full_answer)
         meta.answer = answer
 
-        # Calculate user-facing token usage
-        user_text = _extract_user_query(openai_messages)
-        meta.prompt_tokens = max(len(user_text.split()), 1) if user_text else 1
-        meta.completion_tokens = max(len(answer.split()), 1) if answer else 0
+        # Estimate token usage for streaming (vLLM doesn't return usage in stream mode)
+        # Use ~4 chars per token approximation for prompt
+        prompt_text = " ".join(
+            m.content if hasattr(m, 'content') and isinstance(m.content, str) else ''
+            for m in lc_messages
+        )
+        meta.prompt_tokens = max(len(prompt_text) // 4, 1)
+        meta.completion_tokens = max(len(answer) // 4, 1) if answer else 0
         meta.total_tokens = meta.prompt_tokens + meta.completion_tokens
 
         user_query = _extract_user_query(openai_messages)
