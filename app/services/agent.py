@@ -269,8 +269,8 @@ WHEN WEB SEARCH RESULTS ARE PROVIDED:
 5. NEVER say "I don't have real-time access" — you DO have real-time access.
 6. Answer naturally as if you already know this information — like a knowledgeable friend.
 7. Use emojis and bullet points to organize the info nicely.
-8. Put source links at the very end in a small "Sources:" section, NOT next to each item.
-9. At the end, offer to help with more details.
+8. DO NOT include a "Sources:" section, source list, reference list, or any URLs in your answer. The sources are delivered separately by the API. Your text response should contain ZERO source links, URLs, citation numbers like [1][2], or reference lists.
+9. At the end, offer to help with more details — but NEVER list sources, links, or references.
 
 EXAMPLE FORMAT for restaurant/place queries:
 "Here are some awesome brunch spots in Seattle! 🍳
@@ -335,6 +335,24 @@ def _extract_user_query(openai_messages: list) -> str:
             )
         return content or ""
     return ""
+
+
+def _strip_sources_from_answer(text: str) -> str:
+    """Remove 'Sources:', 'References:', and URL lists from the bot's answer.
+    The sources are returned separately in the API response, so we don't want
+    them duplicated in the text."""
+    if not text:
+        return text
+    # Strip everything from "Sources:" / "References:" onwards (case-insensitive)
+    patterns = [
+        r"\n+\s*\*?\*?(Sources?|References?|Citations?|Links?)\s*:?\s*\*?\*?\s*\n[\s\S]*$",
+        r"\n+\s*-{3,}\s*\n\s*\*?\*?(Sources?|References?)\s*:?\s*\*?\*?[\s\S]*$",
+    ]
+    for pat in patterns:
+        text = re.sub(pat, "", text, flags=re.IGNORECASE)
+    # Also strip trailing citation-only lines like "[1] https://..."
+    text = re.sub(r"\n+(\[\d+\][^\n]*\n?)+\s*$", "", text)
+    return text.rstrip()
 
 
 def _flatten_content(content) -> str:
@@ -416,14 +434,15 @@ def _build_messages(
         augmented_user_msg = (
             f"{final_user_text}\n\n"
             f"---\n"
-            f"WEB SEARCH RESULTS:\n\n"
+            f"WEB SEARCH RESULTS (internal reference only — do NOT show to user):\n\n"
             f"{web_context}\n\n"
             f"---\n"
             f"INSTRUCTION: Extract the actual information from the results above and answer directly. "
-            f"Give specific names, facts, and details — NOT just article titles or source links. "
+            f"Give specific names, facts, and details — NOT just article titles. "
             f"For places/restaurants: list specific place names with what they're known for. "
             f"Do NOT mention search dates. Answer naturally like you already know this. "
-            f"Put source links in a small section at the very end only."
+            f"DO NOT include a 'Sources:' section, reference list, URLs, or citation numbers like [1][2] in your answer. "
+            f"The API handles sources separately — your text must contain ZERO links or references."
         )
         messages.append(HumanMessage(content=augmented_user_msg))
     elif final_user_text:
@@ -519,6 +538,10 @@ async def get_agent_response(
     llm = _build_llm(temperature, max_tokens, streaming=False)
     reply = await llm.ainvoke(lc_messages)
     answer = _flatten_content(getattr(reply, "content", "")) or ""
+
+    # Strip any sources section the LLM included (we send sources separately)
+    if search_performed:
+        answer = _strip_sources_from_answer(answer)
 
     # Extract actual token usage from Qwen/vLLM
     usage_meta = getattr(reply, "response_metadata", {})
@@ -639,6 +662,9 @@ async def stream_agent_response(
 
         # After streaming is done, calculate tokens and save to memory
         answer = "".join(full_answer)
+        # Strip any sources section before saving (sent separately in API response)
+        if search_performed:
+            answer = _strip_sources_from_answer(answer)
         meta.answer = answer
 
         # Estimate token usage for streaming (vLLM doesn't return usage in stream mode)
